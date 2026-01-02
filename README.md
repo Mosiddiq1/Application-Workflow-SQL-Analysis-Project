@@ -81,5 +81,37 @@ This project demonstrates the ability to:
 
 It complements the Power BI dashboard built on the same dataset, showcasing an end-to-end analytics workflow.
 
+## ✅ Progress Summary (SQL)
+
+The following steps have been completed as part of the SQL analysis workflow:
+
+### Data Ingestion
+- Imported the original CSV dataset into SQL Server as a raw staging table.
+- Preserved all original records, including duplicates, nulls, and outliers, to reflect real-world data conditions.
+
+### Data Validation
+- Verified successful import with an initial row count of **825 records**.
+- Performed sanity checks to confirm data integrity before analysis.
+
+### Duplicate Detection
+- Identified **26 duplicate records** based on `ApplicationID`.
+- Confirmed that the majority of duplicates were identical.
+- Differentiated between true duplicates and records with missing primary keys.
+
+### Handling Missing Primary Keys
+- Detected **2 records with NULL ApplicationID values** containing distinct data.
+- Retained these records as data quality issues rather than assigning artificial identifiers.
+- This approach reflects real-world data governance and auditability practices.
+
+### Deduplication Logic
+- Implemented deduplication using `ROW_NUMBER()` partitioned by `ApplicationID`.
+- Retained the most recent record per application.
+- Created a clean reporting view (`dbo.vw_Applications_Clean`) while leaving the raw table unchanged.
+
+### Clean Data Layer
+- Established a clean, reusable SQL view to serve as the foundation for all further analysis.
+- This mirrors a layered SQL architecture commonly used in production analytics environments.
+
+
 ## Creater
  Omar Siddiq
