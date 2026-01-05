@@ -112,6 +112,12 @@ The following steps have been completed as part of the SQL analysis workflow:
 - Established a clean, reusable SQL view to serve as the foundation for all further analysis.
 - This mirrors a layered SQL architecture commonly used in production analytics environments.
 
+## Payment Health Analysis
+Analysed payment outcomes across Paid, Pending, and Unpaid applications.
+Calculated payment completion rate, total collected revenue (Paid only), and outstanding application volume.
+Identified that ~29% of applications remain financially incomplete, with the highest outstanding volume coming from high-throughput application types such as Student Registration and Fully Qualified.
+Further analysis revealed a small number of long standing outstanding cases (>500 days), indicating potential abandoned or unclosed workflows rather than recent payment delays.
+
 
 ## Creater
  Omar Siddiq
