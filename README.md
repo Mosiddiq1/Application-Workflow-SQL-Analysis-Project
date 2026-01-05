@@ -112,6 +112,9 @@ The following steps have been completed as part of the SQL analysis workflow:
 - Established a clean, reusable SQL view to serve as the foundation for all further analysis.
 - This mirrors a layered SQL architecture commonly used in production analytics environments.
 
+## Processing Time Analysis
+Evaluated application processing performance by calculating average days to process across application types and applicant categories (UK vs International). Integer processing duration values were explicitly cast to numeric types to ensure accurate averaging and rounding.
+
 ## Payment Health Analysis
 Analysed payment outcomes across Paid, Pending, and Unpaid applications.
 Calculated payment completion rate, total collected revenue (Paid only), and outstanding application volume.
