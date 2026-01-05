@@ -111,6 +111,9 @@ The following steps have been completed as part of the SQL analysis workflow:
 ### Clean Data Layer
 - Established a clean, reusable SQL view to serve as the foundation for all further analysis.
 - This mirrors a layered SQL architecture commonly used in production analytics environments.
+  
+## Data Quality Handling
+Data quality checks identified empty-string values used in place of missing data; these were handled explicitly in filtering logic to prevent distorted aggregations. The analysis highlighted that restoration workflows consistently take longer to process than standard registrations, while international applications show marginally higher average processing times, reflecting realistic operational complexity.
 
 ## Processing Time Analysis
 Evaluated application processing performance by calculating average days to process across application types and applicant categories (UK vs International). Integer processing duration values were explicitly cast to numeric types to ensure accurate averaging and rounding.
