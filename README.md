@@ -10,7 +10,9 @@ The objective of this project is to use **SQL** to analyse an application proces
 
 The project is designed to simulate a real world analytics task where raw operational data must first be validated and cleaned before being used for reporting or analysis.
 
----
+## Executive Summary
+
+This analysis evaluated an end-to-end application processing workflow to identify operational bottlenecks, payment risks, and performance drivers.
 
 ## Business Questions
 
