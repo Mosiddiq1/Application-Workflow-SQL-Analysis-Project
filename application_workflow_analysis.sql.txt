@@ -1,0 +1,375 @@
+/*========================================================
+ Application Workflow - SQL Analysis (Portfolio)
+ Dataset: Synthetic application processing workflow
+ Goal: Validate data, clean it (without destroying realism),
+       then answer manager-style operational questions.
+========================================================*/
+
+USE GOC;
+
+/*========================================================
+ 1) QUICK CHECKS (Raw table)
+ Why:
+ - Confirm the import worked
+ - Understand baseline row counts before cleaning
+========================================================*/
+
+-- 1.1 Total rows in raw table
+SELECT COUNT(*) AS RawRowCount
+FROM dbo.[GOC Draft 1];
+
+-- Shows: total rows (includes duplicates + intentional issues)
+
+
+-- 1.2 Basic column completeness checks (blanks + NULLs)
+
+SELECT
+    SUM(CASE WHEN ApplicationID IS NULL OR LTRIM(RTRIM(ApplicationID)) = '' THEN 1 ELSE 0 END) AS BlankOrNull_ApplicationID,
+    SUM(CASE WHEN ApplicantType IS NULL OR LTRIM(RTRIM(ApplicantType)) = '' THEN 1 ELSE 0 END) AS BlankOrNull_ApplicantType,
+    SUM(CASE WHEN ApplicationType IS NULL OR LTRIM(RTRIM(ApplicationType)) = '' THEN 1 ELSE 0 END) AS BlankOrNull_ApplicationType,
+    SUM(CASE WHEN PaymentStatus IS NULL OR LTRIM(RTRIM(PaymentStatus)) = '' THEN 1 ELSE 0 END) AS BlankOrNull_PaymentStatus,
+    SUM(CASE WHEN PaymentAmount IS NULL THEN 1 ELSE 0 END) AS Null_PaymentAmount,
+    SUM(CASE WHEN SubmissionDate IS NULL THEN 1 ELSE 0 END) AS Null_SubmissionDate
+FROM dbo.[GOC Draft 1];
+
+-- Shows: which fields contain missing values (some were intentionally inputted)
+
+
+/*========================================================
+ 2) DUPLICATE DETECTION (Raw table)
+ Why:
+ - Duplicates inflate KPIs (counts, revenue, workload)
+ - Need to identify duplicate keys before analysis
+========================================================*/
+
+-- 2.1 Identify duplicate ApplicationIDs
+SELECT
+    ApplicationID,
+    COUNT(*) AS RecordCount
+FROM dbo.[GOC Draft 1]
+GROUP BY ApplicationID
+HAVING COUNT(*) > 1
+ORDER BY RecordCount DESC;
+
+-- Shows: ApplicationIDs that appear more than once
+
+
+-- 2.2 Check if duplicates are identical or different
+-- (Example: inspect one duplicate ApplicationID manually)
+-- Replace APP-100029 with any duplicate you found
+SELECT *
+FROM dbo.[GOC Draft 1]
+WHERE ApplicationID = 'APP-100029';
+
+-- Shows: whether duplicate rows match exactly or contain differences
+
+
+/*========================================================
+
+ 3) CREATE A CLEAN REPORTING VIEW (Non-destructive)
+ Why:
+ - In real work you rarely delete raw data
+ - You create a clean layer for reporting/analysis
+ - This view:
+    * removes blank ApplicationID rows (bad primary key)
+    * keeps ONE row per ApplicationID (dedup)
+    * standardises blanks to '' checks later
+ Notes:
+ - If duplicates are identical, keeping 1 is safe.
+ - If duplicates differ, you need a business rule.
+   Here we keep the "latest" record by dates.
+========================================================*/
+
+-- IMPORTANT:
+-- CREATE VIEW must be the first statement in the batch,
+
+
+CREATE OR ALTER VIEW dbo.vw_Applications_Clean AS
+WITH Ranked AS (
+    SELECT
+        -- Keep all fields you care about
+        ApplicationID,
+        SubmissionDate,
+        ApplicantType,
+        Country,
+        Age,
+        ApplicationType,
+        DocumentStatus,
+        PaymentStatus,
+        PaymentAmount,
+        PaymentMethod,
+        PaymentDate,
+        PaymentQuarter,
+        ProcessingStage,
+        DaysToProcess,
+        DataCheckStatus,
+        MissingInfoFlag,
+
+        -- Dedup rule:
+        -- 1) prefer the most recent PaymentDate
+        -- 2) then most recent SubmissionDate
+        -- 3) then stable tie-breaker by ApplicationID
+        ROW_NUMBER() OVER (
+            PARTITION BY ApplicationID
+            ORDER BY
+                CASE WHEN PaymentDate IS NULL THEN 0 ELSE 1 END DESC,
+                PaymentDate DESC,
+                SubmissionDate DESC,
+                ApplicationID
+        ) AS rn
+    FROM dbo.[GOC Draft 1]
+    WHERE
+        -- Remove missing primary key values from "clean layer"
+        ApplicationID IS NOT NULL
+        AND LTRIM(RTRIM(ApplicationID)) <> ''
+)
+SELECT
+    ApplicationID,
+    SubmissionDate,
+    ApplicantType,
+    Country,
+    Age,
+    ApplicationType,
+    DocumentStatus,
+    PaymentStatus,
+    PaymentAmount,
+    PaymentMethod,
+    PaymentDate,
+    PaymentQuarter,
+    ProcessingStage,
+    DaysToProcess,
+    DataCheckStatus,
+    MissingInfoFlag
+FROM Ranked
+WHERE rn = 1;
+GO
+
+-- 3.1 Validate cleaned row count
+SELECT COUNT(*) AS CleanRowCount
+FROM dbo.vw_Applications_Clean;
+-- Shows: number of unique applications (post-dedup, no blank IDs)
+
+
+/*========================================================
+ 4) DATA QUALITY CHECKS (Clean layer)
+ Why:
+ - Confirm we removed primary key issues
+ - Identify remaining blanks (categorical) / NULLs (numeric/date)
+========================================================*/
+
+-- 4.1 Confirm no blank ApplicationIDs remain
+SELECT COUNT(*) AS BlankAppID_InClean
+FROM dbo.vw_Applications_Clean
+WHERE ApplicationID IS NULL OR LTRIM(RTRIM(ApplicationID)) = '';
+-- Should be 0
+
+
+-- 4.2 Check for remaining missing fields (business-relevant)
+SELECT
+    SUM(CASE WHEN ApplicantType IS NULL OR LTRIM(RTRIM(ApplicantType)) = '' THEN 1 ELSE 0 END) AS Missing_ApplicantType,
+    SUM(CASE WHEN ApplicationType IS NULL OR LTRIM(RTRIM(ApplicationType)) = '' THEN 1 ELSE 0 END) AS Missing_ApplicationType,
+    SUM(CASE WHEN PaymentStatus IS NULL OR LTRIM(RTRIM(PaymentStatus)) = '' THEN 1 ELSE 0 END) AS Missing_PaymentStatus,
+    SUM(CASE WHEN PaymentAmount IS NULL THEN 1 ELSE 0 END) AS Missing_PaymentAmount,
+    SUM(CASE WHEN SubmissionDate IS NULL THEN 1 ELSE 0 END) AS Missing_SubmissionDate
+FROM dbo.vw_Applications_Clean;
+-- Shows: quality of key fields after creating the clean reporting layer
+
+
+/*========================================================
+ 5) OPERATIONAL PERFORMANCE (Manager questions)
+========================================================*/
+
+-- 5.1 Workload by Processing Stage
+
+SELECT
+    ProcessingStage,
+    COUNT(*) AS Applications
+FROM dbo.vw_Applications_Clean
+WHERE ProcessingStage <> ''
+GROUP BY ProcessingStage
+ORDER BY Applications DESC;
+
+-- Shows: where applications are sitting in the workflow (backlog distribution)
+
+
+-- 5.2 Average processing time by stage
+
+-- Why CAST float:
+-- - AVG on integers can return an integer unless cast
+-- - float ensures decimals are preserved, then we ROUND to 2dp
+
+SELECT
+    ProcessingStage,
+    ROUND(AVG(CAST(DaysToProcess AS float)), 2) AS AvgDaysToProcess
+FROM dbo.vw_Applications_Clean
+WHERE ProcessingStage <> ''
+GROUP BY ProcessingStage
+ORDER BY AvgDaysToProcess DESC;
+
+-- Shows: which stage is the bottleneck by average processing time
+-- Note: If some stages have DaysToProcess = 0 by design (e.g., Submitted),
+-- consider excluding them in analysis with WHERE DaysToProcess > 0
+
+
+-- 5.3 Average processing time by Application Type
+
+SELECT
+    ApplicationType,
+    ROUND(AVG(CAST(DaysToProcess AS float)), 2) AS AvgDaysToProcess,
+    COUNT(*) AS Applications
+FROM dbo.vw_Applications_Clean
+WHERE DaysToProcess > 0
+  AND ApplicationType <> ''
+GROUP BY ApplicationType
+ORDER BY AvgDaysToProcess DESC;
+
+-- Shows: which application types are most time-consuming (e.g., restorations)
+
+
+-- 5.4 Identify “slow cases” threshold (example > 15 days)
+
+SELECT
+    ApplicationType,
+    COUNT(*) AS SlowCases
+FROM dbo.vw_Applications_Clean
+WHERE DaysToProcess > 15
+  AND ApplicationType <> ''
+GROUP BY ApplicationType
+ORDER BY SlowCases DESC;
+
+-- Shows: which application types contribute most to long-running cases
+
+
+/*========================================================
+ 6) PAYMENT HEALTH (Manager questions)
+========================================================*/
+
+-- 6.1 Payment status distribution
+
+SELECT
+    PaymentStatus,
+    COUNT(*) AS Applications
+FROM dbo.vw_Applications_Clean
+WHERE PaymentStatus <> ''
+GROUP BY PaymentStatus
+ORDER BY Applications DESC;
+
+-- Shows: Paid vs Pending vs Unpaid volumes
+
+
+-- 6.2 Payment completion rate (% Paid)
+SELECT
+    ROUND(
+        100.0 * SUM(CASE WHEN PaymentStatus = 'Paid' THEN 1 ELSE 0 END) / NULLIF(COUNT(*), 0),
+        2
+    ) AS PaymentCompletionRatePct
+FROM dbo.vw_Applications_Clean
+WHERE PaymentStatus <> '';
+-- Shows: overall conversion from submitted applications into paid revenue
+
+
+-- 6.3 Collected revenue (Paid only)
+SELECT
+    SUM(PaymentAmount) AS CollectedRevenue_GBP
+FROM dbo.vw_Applications_Clean
+WHERE PaymentStatus = 'Paid';
+-- Shows: realised revenue (excludes Pending/Unpaid)
+
+
+-- 6.4 Outstanding applications count (Pending + Unpaid)
+SELECT
+    COUNT(*) AS OutstandingApplications
+FROM dbo.vw_Applications_Clean
+WHERE PaymentStatus IN ('Pending', 'Unpaid');
+-- Shows: operational backlog that still needs payment action
+
+
+-- 6.5 Outstanding by application type (where the risk sits)
+SELECT
+    ApplicationType,
+    COUNT(*) AS OutstandingApps
+FROM dbo.vw_Applications_Clean
+WHERE PaymentStatus IN ('Pending', 'Unpaid')
+  AND ApplicationType <> ''
+GROUP BY ApplicationType
+ORDER BY OutstandingApps DESC;
+-- Shows: which categories drive the most outstanding workload
+
+
+/*========================================================
+ 7) DELAY DRIVERS (Root cause analysis)
+ Why:
+ - Test whether delays are caused by ApplicantType, PaymentStatus, or ApplicationType
+========================================================*/
+
+-- 7.1 UK vs International delay comparison
+SELECT
+    ApplicantType,
+    ROUND(AVG(CAST(DaysToProcess AS float)), 2) AS AvgDaysToProcess,
+    COUNT(*) AS Applications
+FROM dbo.vw_Applications_Clean
+WHERE DaysToProcess > 0
+  AND ApplicantType <> ''
+GROUP BY ApplicantType
+ORDER BY AvgDaysToProcess DESC;
+-- Shows: if international cases take longer due to additional complexity
+
+
+-- 7.2 Payment status vs delay
+SELECT
+    PaymentStatus,
+    ROUND(AVG(CAST(DaysToProcess AS float)), 2) AS AvgDaysToProcess,
+    COUNT(*) AS Applications
+FROM dbo.vw_Applications_Clean
+WHERE DaysToProcess > 0
+  AND PaymentStatus <> ''
+GROUP BY PaymentStatus
+ORDER BY AvgDaysToProcess DESC;
+-- Shows: whether payment state is associated with longer processing
+
+
+-- 7.3 Interaction effect: ApplicationType x PaymentStatus
+SELECT
+    ApplicationType,
+    PaymentStatus,
+    ROUND(AVG(CAST(DaysToProcess AS float)), 2) AS AvgDaysToProcess,
+    COUNT(*) AS Applications
+FROM dbo.vw_Applications_Clean
+WHERE DaysToProcess > 0
+  AND ApplicationType <> ''
+  AND PaymentStatus <> ''
+GROUP BY ApplicationType, PaymentStatus
+ORDER BY AvgDaysToProcess DESC;
+-- Shows: whether specific application types remain slow even when Paid
+-- Strong evidence delays are process-driven (not payment-driven)
+
+
+/*========================================================
+ 8) OPTIONAL: AGEING OF OUTSTANDING CASES
+ Why:
+ - Detect abandoned/stuck cases (e.g., > 180 days outstanding)
+========================================================*/
+
+-- 8.1 Average days since submission by payment status
+SELECT
+    PaymentStatus,
+    ROUND(AVG(CAST(DATEDIFF(day, SubmissionDate, GETDATE()) AS float)), 2) AS AvgDaysSinceSubmission
+FROM dbo.vw_Applications_Clean
+WHERE PaymentStatus <> ''
+  AND SubmissionDate IS NOT NULL
+GROUP BY PaymentStatus
+ORDER BY AvgDaysSinceSubmission DESC;
+-- Shows: whether Pending/Unpaid are ageing and becoming risk/backlog
+
+
+-- 8.2 Top 10 most overdue outstanding cases (for follow-up list)
+SELECT TOP 10
+    ApplicationID,
+    ApplicationType,
+    PaymentStatus,
+    DATEDIFF(day, SubmissionDate, GETDATE()) AS DaysOutstanding
+FROM dbo.vw_Applications_Clean
+WHERE PaymentStatus IN ('Pending', 'Unpaid')
+  AND SubmissionDate IS NOT NULL
+ORDER BY DaysOutstanding DESC;
+-- Shows: worst offenders that may require escalation or closure rules
