@@ -12,11 +12,11 @@ The project is designed to simulate a real world analytics task where raw operat
 
 ## Executive Summary
 
-This analysis evaluated an end-to-end application processing workflow to identify operational bottlenecks, payment risks, and performance drivers.
+This analysis evaluated an end to end application processing workflow to identify operational bottlenecks, payment risks, and performance drivers.
 
 The findings show that while the majority of applications are successfully completed and paid, a significant proportion remain outstanding, creating operational and financial risk. Processing delays are not primarily driven by payment status or applicant geography, but by application type, with restoration workflows consistently taking over twice as long as standard registrations.
 
-Further investigation revealed a small number of long-standing outstanding cases (over 500 days since submission), indicating abandoned or unclosed workflows rather than recent delays. These insights highlight clear opportunities for targeted process improvement and backlog reduction.
+Further investigation revealed a small number of long standing outstanding cases (over 500 days since submission), indicating abandoned or unclosed workflows rather than recent delays. These insights highlight clear opportunities for targeted process improvement and backlog reduction.
 
 ## Business Questions
 
