@@ -130,6 +130,19 @@ Calculated payment completion rate, total collected revenue (Paid only), and out
 Identified that ~29% of applications remain financially incomplete, with the highest outstanding volume coming from high-throughput application types such as Student Registration and Fully Qualified.
 Further analysis revealed a small number of long standing outstanding cases (>500 days), indicating potential abandoned or unclosed workflows rather than recent payment delays.
 
+## Recommendations & Next Steps
+
+Based on the analysis, the following actions would deliver the greatest operational impact:
+
+1) Prioritise restoration workflows (BD RESTO, FQ RESTO, Student Resto), as they are the primary driver of extended processing times regardless of payment status. The main reason as to why this happening however is due to further checks required by FTP.
+
+2) Introduce ageing-based monitoring for applications exceeding defined thresholds (e.g. 15, 30, 90 days) to identify stalled or abandoned cases earlier.
+
+3) Implement closure or escalation rules for long-standing outstanding applications to prevent historical records inflating backlog and KPI reporting.
+
+4) Track stage-level performance KPIs, particularly within the “In Review” stage, which represents the main operational bottleneck.
+
+5) These actions would improve throughput, reduce backlog risk, and provide clearer operational visibility for management decision-making.
 
 ## Creater
  Omar Siddiq
